@@ -48,8 +48,7 @@ PC 든 맥이든 같은 도구, 같은 순서다. DB 에 직접 닿는 CLI(`veri
 
 **준비(기기마다 한 번):** Tailscale 로 같은 tailnet + 사용자 환경 변수 `MCP_REMOTE_TOKEN`
 (PC: `setx`, 맥: `~/.zshrc` — `docs/claude/2026-09-14-MCP-원격-HTTP.md` §7). 그다음 이 레포 폴더에서 연
-**새 세션**에서 `/mcp` 에서 `plugin:mathbank:mathbank` 가 「Connected」인지 본다(아니면 거기서 인증). PC 는 로컬 stdio 서버 `math-question-bank`
-를 써도 같다(도구 이름 접두사만 다르다 — `mcp__plugin_mathbank_mathbank__…` / `mcp__plugin_mathbank_mathbank__…`).
+**새 세션**에서 `/mcp` 에서 `plugin:mathbank:mathbank` 가 「Connected」인지 본다(아니면 거기서 인증). 도구 이름 접두사는 `mcp__plugin_mathbank_mathbank__…` 다.
 관리자 화면은 두 기기 모두 같은 tailnet 주소로 연다.
 
 ---
