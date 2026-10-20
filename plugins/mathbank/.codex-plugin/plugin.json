@@ -1,0 +1,10 @@
+{
+  "name": "mathbank",
+  "version": "2026.10.20",
+  "description": "벨라 수학 문제은행 — MCP 연결 + 운영 스킬",
+  "author": {
+    "name": "Xpanner"
+  },
+  "skills": "./skills",
+  "mcpServers": "./.codex-mcp.json"
+}

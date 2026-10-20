@@ -1,6 +1,6 @@
 ---
 name: manual-extract
-description: "교재·기출 PDF 를 유료 vision LLM 없이 에이전트가 지면을 직접 읽어 옮겨 적는 '수동 추출' 배치를 처음부터 끝까지 돌리는 오케스트레이터. 윈도우 PC·맥 어디서든 같은 MCP 경로로 돈다. 범위 결정 → 지면 실측(README·SPLIT) → 전사 병렬 → dryRun → 적재 → 화면 등록 → 무료 검산 → 승인 → 판정관(검산불가 정답·무아치 난이도) → 마감 기록. '수동 추출', '수동추출 다음 배치', '다음 장 추출', 'N장 옮겨 적어', 'RPM/쎈 N~M쪽 추출', 'extract_pages', '전사 에이전트', '추출 이어서/재실행', '전사 다시', '이 배치 마감', '판정관만 다시' 요청 시 반드시 이 스킬을 사용할 것. 그림 코드 전사(figure_transcribe)·검수 큐 일반 처리·vision LLM 자동 추출(과금)은 이 스킬이 아니다."
+description: "교재·기출 PDF 를 유료 vision LLM 없이 에이전트가 지면을 직접 읽어 옮겨 적는 '수동 추출' 배치를 처음부터 끝까지 돌리는 오케스트레이터. 윈도우 PC·맥 어디서든 같은 MCP 경로로 돈다. 범위 결정 → 지면 실측(README·SPLIT) → 전사 병렬 → 눈가림 솔버(aiChecks) → dryRun → 적재 → 등록 = 자동 검수(통과분 즉시 VERIFIED) → 남은 문항만 검산·승인·판정관 → 마감 기록. '수동 추출', '수동추출 다음 배치', '다음 장 추출', 'N장 옮겨 적어', 'RPM/쎈 N~M쪽 추출', 'extract_pages', '전사 에이전트', '추출 이어서/재실행', '전사 다시', '이 배치 마감', '판정관만 다시', '추출한 문제 검산하고 등록해줘' 요청 시 반드시 이 스킬을 사용할 것. 그림 코드 전사(figure_transcribe)·검수 큐 일반 처리·vision LLM 자동 추출(과금)은 이 스킬이 아니다."
 ---
 
 # 수동 추출 — 배치 오케스트레이터
@@ -43,8 +43,11 @@ PC 든 맥이든 같은 도구, 같은 순서다. DB 에 직접 닿는 CLI(`veri
 | 적재 | `extract_pages_apply`(기본 dryRun) → 잡 생성 |
 | 무료 검산 | `verify_ids`(잡 번호로, 기본 dryRun) — DRAFT → 검수 큐, 검산식 없는 문항은 `skippedIds` |
 | 판정 입력 | `problem_list`(`document`·`state` + 결과의 `source.page`) · `problem_get` · `problem_figures_read` |
-| 판정 적재 | `review_verdicts_apply`(정답) · `difficulty_verdicts_apply`(난이도, `overwrite`) |
-| **사람만** | 등록(`/admin/bank/problems/extract` "검토·등록") · 승인(`/admin/review`) — MCP 가 일부러 열지 않는다 |
+| 판정 적재 | `review_verdicts_apply`(정답, verdict 별 `band` 로 난이도 같이) · `difficulty_verdicts_apply`(난이도, `overwrite`) |
+| 마감 점검 | `document_status`(문서별 상태·승인 막힘 사유) · `answer_lint`(자동채점 안 되는 정답) · `duplicate_check` · `problem_get_many` |
+| 정답 교정 | `answer_corrections_apply`(새 revision DRAFT → 재검수, 기본 dryRun) |
+| 승인 | `review_approve`(화면 일괄 승인과 같은 게이트, IN_REVIEW 만, 기본 dryRun) — **사용자가 승인하라고 했을 때만** dryRun:false |
+| 정답·해설 PDF | `document_answer_pdf`(서명 URL 30분) |
 
 **준비(기기마다 한 번):** Tailscale 로 같은 tailnet + 사용자 환경 변수 `MCP_REMOTE_TOKEN`
 (PC: `setx`, 맥: `~/.zshrc` — `docs/claude/2026-09-14-MCP-원격-HTTP.md` §7). 그다음 이 레포 폴더에서 연
@@ -96,7 +99,25 @@ PC 든 맥이든 같은 도구, 같은 순서다. DB 에 직접 닿는 CLI(`veri
 적는다(`extract-transcriber` 원칙 6-1 · lessons L-25). 등록하면 `Problem.sourceRegion`·`answerKeyPage`·`answerKeyRegion` 으로 가고
 문항 상세 「원본 대조」가 그 부분만 자른다. 영역 없이 등록된 과거 문항은 MCP `problem_region_update`(dryRun 기본)로 채운다.
 
+**해설 지면이 없는 문서(기출 시험지 등)는 전사관이 문항을 직접 풀어 `answers`(page 없음)·`explanationLatex`·검산식을 함께 쓴다**
+(전사관 원칙 5-1, 2026-10-19). 요청함 `extract_pages` 가 `includeExplanations:false` 거나 문서에 정답지가 없을 때가 여기 해당한다 —
+"정답·해설 없이 문항만" 으로 끝내지 않는다. **그림 문항은 같은 패스에서 `figureCode` 까지**(원칙 6-2) — 그림 전사 배치로 미루지 않는다.
+브리프에 "해설 지면 없음 → 직접 풀기" 와 "그림 코드 필수" 를 명시한다.
+
 한 명이 실패하면 1회만 다시 띄운다(이미 쓴 jsonl 을 이어 쓰라고). 또 실패하면 보고하고 나머지 구분은 대기.
+
+## Phase 3.5. 눈가림 풀이 — 솔버 1명 (등록 = 자동 검수의 입력)
+
+2026-10-20 「등록 = 자동 검수」(`docs/claude/2026-10-20-등록-자동검수.md`): 적재할 때 문항별 AI 눈가림 풀이(`aiChecks`)를
+같이 실으면, 등록하는 순간 서버가 정답표+SymPy+AI 대조로 판정해 통과분을 **바로 VERIFIED** 로 올린다. 나머지는 IN_REVIEW + 사유.
+
+- **정답을 본 에이전트는 풀지 않는다.** 전사관은 해설 지면을 읽었으니 독립 검산이 아니다. 솔버는 `general-purpose`(opus) 를
+  **새로** 띄우고 브리프에 `out/pages-<구분>.jsonl` 경로만 준다 — `answers-*.jsonl`·`specs-*.jsonl`·해설 쪽 번호·`extract_pages_read`
+  해설 지면은 주지 않는다(서버는 눈가림을 확인할 수 없다 — 이 규칙이 유일한 보장이다).
+- 솔버는 지문·보기만 보고 풀어 `out/aichecks-<구분>.jsonl` 에 `{number, page, answer, explanationLatex?, note?}` 를 쓴다.
+  객관식은 보기 키("1"~"5"), 그 외는 평문 값. 그림이 있어야 풀리는 문항은 본문 지면 그림(`extract_pages_read` **본문 쪽만**)을 보거나,
+  못 풀면 `answer: null` + `note`. 추측하지 않는다. 난이도는 쓰지 않는다(추출 난이도 체인이 단일 소스).
+- 구분이 여럿이면 솔버 1명이 차례로 푼다(병렬 상한 3 은 전사관이 이미 썼다).
 
 ## Phase 4. 사전 점검 (메인)
 
@@ -108,15 +129,18 @@ PC 든 맥이든 같은 도구, 같은 순서다. DB 에 직접 닿는 CLI(`veri
 
 ## Phase 5. 적재 → 등록 → 무료 검산 → 승인
 
-1. **메인이 직접 적재한다**: 구분마다 `out/{pages,answers,specs}-<구분>.jsonl` 을 읽어 전사관이 보고한 쪽 범위 그대로
-   `extract_pages_apply(…, dryRun:false)` → 잡 번호 회수. 서브에이전트의 쓰기는 auto mode 분류기가 들쭉날쭉 막는다
+1. **메인이 직접 적재한다**: 구분마다 `out/{pages,answers,specs,aichecks}-<구분>.jsonl` 을 읽어 전사관이 보고한 쪽 범위 그대로
+   `extract_pages_apply(…, aiChecks, dryRun:false)` → 잡 번호 회수. 응답의 `aiChecks: {attached, unknown, ambiguous}` 에서
+   `unknown`·`ambiguous` 가 있으면 번호·page 를 고쳐 다시 싣는다(안 붙은 문항은 자동 검수 없이 DRAFT 로 등록된다). 서브에이전트의 쓰기는 auto mode 분류기가 들쭉날쭉 막는다
    (2026-10-10 그림 전사 첫 배치: 3명 중 1명 차단). items 를 메인이 한 번 싣는 비용이 그보다 싸다.
-2. **등록은 사용자에게 요청한다** — `/admin/bank/problems/extract` 에서 잡마다 "검토·등록". 잡 번호·건수를 주고
-   끝나면 알려 달라고 한다.
+2. **등록 = 자동 검수** — `extract_job_register(jobId, dryRun:true)` 로 건수·중복 후보를 보고 `dryRun:false`
+   (또는 사용자가 화면 "검토·등록"). 응답 `autoApprove: {verified, inReview[{id, reasons}], failed}` 가 판정 결과다 —
+   `verified` 는 이미 VERIFIED 이니 3·4 를 건너뛴다. 아래 3·4 와 Phase 6 은 **`inReview` 와 aiChecks 없이 등록된 문항에만** 돈다.
 3. `verify_ids(extractionJobIds:[…])` dryRun → 대상 수 확인 → `dryRun:false`. 한 번에 150건까지라 잡이 크면
    잡별로 나눠 부른다. 결과의 `skippedIds` = 검산식 `none` 문항 → 판정관의 정답 판정 대상. `failed` 는 보고.
-4. **승인은 사용자에게 요청한다** — `/admin/review` 기계 줄 "이상 없는 항목 전체 선택 → 승인". 난이도가 비어
-   막히는 건(`blockedByNoDifficulty`) Phase 6 뒤에 다시.
+4. **승인** — `document_status` 로 막힘 사유를 보고 `review_approve` dryRun 으로 건수를 센 뒤, 사용자가 승인하라고
+   하면 `dryRun:false`(아니면 `/admin/review` 기계 줄에서 사용자가 직접). 난이도가 비어 막히는 건(`blockedByNoDifficulty`)
+   Phase 6 뒤에 다시. 승인 전에 `answer_lint` 로 자동채점 안 되는 정답을 걸러 `answer_corrections_apply` 로 고친다.
 
 판정 대상 정리 → `<out>/review/targets.md` 에 두 목록:
 - **정답 판정**: `skippedIds`.
@@ -134,7 +158,7 @@ PC 든 맥이든 같은 도구, 같은 순서다. DB 에 직접 닿는 CLI(`veri
 - `difficulty_verdicts_apply(dryRun:false)` — 지면 매핑 임시값이 박혀 `protectedRated` 가 나오면 **사용자에게
   알리고** `overwrite:true`.
 
-그 뒤 남은 IN_REVIEW 의 승인을 사용자에게 다시 요청한다. `fail` 은 승인하지 않고 「확인 요청」으로.
+그 뒤 남은 IN_REVIEW 는 Phase 5-4 와 같이 `review_approve` 로 승인한다(사용자 지시가 있을 때). `fail` 은 승인하지 않고 「확인 요청」으로.
 
 ## Phase 7. 마감 (메인)
 
@@ -160,7 +184,11 @@ surveyor ─► README.md · SPLIT.md(분담 ≤3)
       │
 transcriber×≤3 ─► out/{pages,answers,specs}-{A,B,C}.jsonl ─► extract_pages_apply(dryRun) ─► SPLIT 진행 로그
       │
-⛔ 사용자 승인 ─► apply(dryRun:false) = 잡 ─► 🙋 화면 등록 ─► verify_ids ─► 🙋 승인
+solver(눈가림, pages-*.jsonl 만) ─► out/aichecks-{A,B,C}.jsonl
+      │
+⛔ 사용자 승인 ─► apply(aiChecks, dryRun:false) = 잡 ─► extract_job_register = 자동 검수(통과분 VERIFIED)
+      │                                                     │ inReview·aiChecks 없음만
+      │                                              verify_ids ─► 🙋 승인
       │                                                          │
       └──────────── review/targets.md(skippedIds + 재판정 쪽) ◄───┘
                          │
@@ -182,6 +210,8 @@ transcriber×≤3 ─► out/{pages,answers,specs}-{A,B,C}.jsonl ─► extract_
 | 등록 화면의 중복 후보 | 기본은 제외. 강제 등록은 사용자 판단 |
 | `verify_ids` 150건 초과 | 잡별로 나눠 부른다 |
 | 판정 `fail` | 승인하지 않는다. 근거를 README 「확인 요청」에 |
+| `extract_pages_apply` 가 `aiChecks` 를 모름 | 운영 앱 옛 이미지(2026-10-20 등록 자동검수 이전) — 재빌드 전에는 aiChecks 없이 싣고 기존 3·4·Phase 6 경로 |
+| `autoApprove.inReview` 사유 "검산 근거 없음" | 정답표·AI 답 불일치 또는 AI 미풀이 — 판정관 정답 판정 대상에 넣는다 |
 
 ## 테스트 시나리오
 

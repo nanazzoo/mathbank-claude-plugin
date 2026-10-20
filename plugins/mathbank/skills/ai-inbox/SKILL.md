@@ -14,12 +14,12 @@ description: "관리자 화면이 AI 요청함(`ai_task`)에 적어 둔 할 일�
 
 | kind | 절차(기존 하네스 재사용) | 에이전트 · 모델 | 닫기 |
 |---|---|---|---|
-| extract_pages | manual-extract Phase 1~3(실측관 → 전사관 ≤3 → `extract_pages_apply` dryRun→적재). 등록·승인은 **사람**(화면). `mode:'vision'` 이어도 vision 라우트를 부르지 않는다(제1 규칙) | extract-surveyor sonnet · extract-transcriber opus | complete `{jobId, pagesDone}` |
+| extract_pages | manual-extract Phase 1~3(실측관 → 전사관 ≤3 → `extract_pages_apply` dryRun→적재). 시험지(≤12쪽)는 실측관 생략. **해설 지면이 없으면(`includeExplanations:false`·정답지 없음) 전사관이 문항을 직접 풀어 정답·해설·검산식을 같이 쓰고, 그림 문항은 `figureCode` 까지 같은 패스에서**(2026-10-19). 등록·승인은 **사람**(화면). `mode:'vision'` 이어도 vision 라우트를 부르지 않는다(제1 규칙) | extract-surveyor sonnet · extract-transcriber opus | complete `{jobId, pagesDone}` |
 | figure_transcribe | figure-transcribe(`figure_transcribe_read` → DSL → 렌더 대조 → `figure_transcribe_apply`, 항상 DRAFT). 단건은 전사관 1 | figure-transcriber opus | complete `{applied, failed}` |
 | ai_check | item-qa 솔버 절차(지문만 보고 풀기 — 정답표를 보지 않는다). 정답표 대조는 서버가 한다 | item-qa-solver sonnet | complete `{answer, explanationLatex?}` (못 풀면 `answer:null`) |
 | specgen | `problem_get` → 식 작성 → `sympy_verify` → `verify_spec_update`(dryRun→적용) | 메인 직접(sonnet) | complete `{kind, expr, passed}` |
 | ai_review | manual-extract 판정관 절차(`review_queue_list` → `problem_get` → `review_verdicts_apply`). 추출 보완 초안(`ai_draft` 해설·유형)이 틀리면 판정에 `fix` 로 고쳐서 낸다(S3) | extract-judge opus | complete `{applied, promoted, blocked}` |
-| relation_wave | 관계 판정관(후보 → verdict) → complete 의 result 로 전달(서버가 `applyRelationJudgements`, payload 의 `batchKey`) | 판정관 opus | complete `{judgements:[{problemId, candidateId, verdict, note}]}` |
+| relation_wave | 관계 판정관(후보 → verdict) → complete 의 result 로 전달(서버가 `applyRelationJudgements`, payload 의 `batchKey`). ⚠ 2026-10-19 부터 등록 직후 자동 연결(`lib/relation-auto-link`, producer `heuristic`)이 기본이라 이 일감은 보조다. 한 문항의 유사 현황·후보는 읽기 도구 `relation_suggest`(id 또는 `#표시번호`) | 판정관 opus | complete `{judgements:[{problemId, candidateId, verdict, note}]}` |
 | templatize | 템플릿 JSON 작성(서버가 형식 검증 + SymPy self-check 후 DRAFT 저장) | 솔버 sonnet | complete `{templates:[{problemId, template}]}` |
 | extract_enrich | 일감의 `context`(문항·`missing`(채울 칸)·학년·`allowedConcepts`·`typeCandidates`) 읽기(그림은 `problem_get`) → **missing 이 true 인 칸만** 채운다: 유형은 `typeCandidates` 중 하나(없으면 null), 정답은 직접 풀어서(객관식은 보기 키), 해설은 **허용 개념 안에서만**(상위 학년 개념 금지). 정답이 이미 있어도 `answer` 를 적는다(서버가 대조해 틀린 답의 해설을 거른다). complete **dryRun** 으로 가드 확인 → 통과면 dryRun=false. 서버가 유형(AI 추정)·정답·해설을 채운 새 revision(DRAFT·`ai_draft`)을 만든다 | 메인 또는 솔버 sonnet | complete `{questionTypeId, answer, explanationLatex, usedConceptNodeIds:[id…], verify?:{kind,expr}}` |
 | derive(extend) · rephrase · generate | 모델이 초안 작성, **저장은 하지 않는다** → result 로 전달(교사가 배너에서 골라 기존 save 라우트로 저장) | 메인 또는 솔버(심화·생성은 opus) | complete `{items[]}` / `{candidates[]}` |
