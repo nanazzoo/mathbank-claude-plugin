@@ -4,14 +4,14 @@
     "name": "Xpanner"
   },
   "metadata": {
-    "description": "벨라 수학 문제은행 — Claude Code 연결(MCP)과 운영 스킬"
+    "description": "BE Math 수학 문제은행 — Claude Code 연결(MCP)과 운영 스킬"
   },
   "plugins": [
     {
       "name": "mathbank",
       "source": "./plugins/mathbank",
       "description": "문제은행 MCP 연결(브라우저 로그인) + 수동 추출·그림 전사·AI 요청함·문항 QA 스킬",
-      "version": "2026.10.21",
+      "version": "2026.11.16",
       "category": "productivity"
     }
   ]

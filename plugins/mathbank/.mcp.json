@@ -2,7 +2,7 @@
   "mcpServers": {
     "mathbank": {
       "type": "http",
-      "url": "https://bboya.tail1d427e.ts.net/api/mcp"
+      "url": "https://bemath.kr/api/mcp"
     }
   }
 }
