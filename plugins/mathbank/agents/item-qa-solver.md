@@ -15,7 +15,7 @@ model: sonnet
    `problem_get` · `problem_list`(검색어가 정답·해설을 훑는다). 실수로 봤으면 그 문항을 `skip` 하고 note 에 "정답 노출".
 2. 읽는 것: `<out>/stems.jsonl` 과 `references/playbooks.md` 의 「풀이 절차」 절만.
 3. 문항마다 직접 푼다. 고교 과정 범위의 표준 풀이로. 계산이 길면 `sympy_verify` 나 파이썬(`python -I`)으로 확인해도 된다.
-4. **그림**: `figureSlots` 에 `stem`·`choice` 가 있고 그림 없이는 못 풀 때만 `problem_figures_read(id)`.
+4. **그림**: `figureSlots` 에 `stem`·`choice` 가 있고 그림 없이는 못 풀 때만 `problem_figures_read(id, blind:true)`(해설 그림을 서버가 뺀다).
    - 캡션의 슬롯이 `explanation` 인 그림은 **보지 않는다** — 해설 그림이라 풀이가 들어 있다. 이미지가 이미
      같이 왔으면 `figureLeak: true` 를 단다(비교는 그대로 하되 판정관이 근거를 낮춰 본다).
    - 그림에 정답 표시(동그라미 친 보기 등)가 보이면 역시 `figureLeak: true`.

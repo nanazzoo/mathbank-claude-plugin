@@ -32,7 +32,7 @@ VERIFIED 12,423건(2026-10-10) 중 CAS 근거 없이 통과한 문항(사람 검
 | ---- | ---- |
 | 표본 | `problem_list(state:"VERIFIED", document, answerType, difficulty, license, limit≤50, offset)` → `total`·`items[].source` |
 | 추출 | `problem_get(id, withVerify, withFigures)` — 지문·보기·정답·해설·검산 기록(**솔버 금지**) |
-| 풀이 | `problem_figures_read(id)`(그림 슬롯 stem·choice 만) · `sympy_verify` · `python -I` |
+| 풀이 | `problem_figures_read(id, blind:true)`(그림 슬롯 stem·choice 만 — blind 가 해설 그림을 뺀다) · `sympy_verify` · `python -I` |
 | 대조 | `scripts/compare_answers.py` — 레포 `.venv` 파이썬(sympy 1.14, antlr 없음 → LaTeX 폴백 파서) |
 | 판정 | `problem_get` · `problem_figures_read` · `extract_pages_read`(원본 지면 대조) |
 

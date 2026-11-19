@@ -20,13 +20,13 @@ model: opus
 3. 지면 보기: `extract_pages_read` 를 본문 2쪽·해설 2쪽씩. 첨자·분수 지수·작은 기호는 `zoom: true` 로 다시.
 4. **메타는 단 단위**: 코너(`stageMark`)·유형은 문항 바로 위 배너로, 난이도는 아치가 덮은 글자 수부터 센다(lessons L-8~L-11).
 5. **해설 매칭은 문항 번호로**(머리말 쪽 번호 아님). 답만 있는 문항은 `explanationLatex: null`.
-5-1. **해설 지면이 없으면 직접 푼다**(2026-10-19 사용자 지시 — 기출 시험지는 대부분 정답지가 따로 없다): 브리프에 해설 쪽이
-   없거나 문서에 정답지가 없으면, 본문 문항을 하나씩 풀어 `answers` 줄을 쓴다 — `page` 없이 `numberLabel`·`answerRaw`·`answer`·
-   `explanationLatex`(풀이 전 과정, 한국어 문장 + `$…$`). 객관식은 보기와 대조해 `answer` 를 보기 번호로. 풀 때마다
-   `sympy_verify` 로 값을 확인하고, 확인이 안 되는 문항(서술 증명·보기 판정)은 풀이만 적고 검산식은 `none`. 이렇게 넣은
-   정답·해설도 등록 뒤 `verify_ids`·판정관을 거쳐야 VERIFIED 다(사람 승인 전까지 DRAFT). 답을 못 내면 그 번호는
-   `answers` 에서 빼고 「확인 요청」에 적는다 — 틀린 답을 넣지 않는다.
-   **해설 조판(2026-10-19 사용자 지시 — "보기 좋게 줄바꿈·띄어쓰기·수식")**: 한 문단에 다 붙이지 않는다. 풀이 단계마다 줄을 바꾸고
+5-1. **해설 지면이 없으면 `answers` 를 비운다**(2026-11-19 MCP 리뷰 E-R3 — 서버 안내 `mcp/workflow.ts` 와 맞춤): 브리프에 해설 쪽이
+   없거나 문서에 정답지가 없거나 정답표에 그 번호가 없으면, 그 문항의 `answers` 줄을 **쓰지 않는다**. `answers` 는 `page` 가 없어도
+   「정답표」(subject `해설`)로 들어가 AI 답 대조의 기준이 되므로, 전사관이 푼 답을 넣으면 제 답을 제 답에 대는 셈이다.
+   정답·해설은 Phase 3.5 의 **눈가림 솔버**가 `aiChecks`(answer + explanationLatex)로 넣고 서버가 「AI 정답(답지 없음)」으로 채운다.
+   그런 문항은 적재 뒤 **다른 에이전트**의 2차 풀이(`extract_job_items_update` aiCrossCheck)가 1차와 일치해야 자동 검수, 아니면 사람 승인이다.
+   전사관은 본문·검산식만 쓴다 — 검산식은 정답 칸이 채워진 뒤 붙으므로 aiChecks 와 함께 적재해야 실린다.
+   **해설 조판(2026-10-19 사용자 지시 — "보기 좋게 줄바꿈·띄어쓰기·수식")** — 해설집 풀이를 옮길 때와 솔버가 aiChecks 풀이를 쓸 때 같다: 한 문단에 다 붙이지 않는다. 풀이 단계마다 줄을 바꾸고
    (`\n`, 단계 사이는 빈 줄 `\n\n`), 핵심 식·결론 식은 별행 `$$…$$` 로, 설명 문장 안의 짧은 식만 `$…$` 로 쓴다. 문장과 수식 사이는
    띄어쓰기(`$k=8$ 또는` ✓ / `$k=8$또는` ✗). 마지막 줄은 `따라서 …` 결론 한 줄. 화면은 `white-space: pre-line` 이라 `\n` 이 그대로 줄이 된다.
 6. **검산식**: SPLIT 「이 장 특유 검산 규칙」을 따른다. 쓸 때마다 `sympy_verify` 로 정답과 맞는지 스스로 확인한다.
@@ -41,15 +41,7 @@ model: opus
    (상세 「원본 대조」가 머리 조각 아래에 이어 붙여 보여 준다, 최대 2조각). 해설 이어짐 줄은 `numberLabel: ""`, 풀이 글은
    머리 줄에 다 적거나 이어짐 줄의 `explanationLatex` 에 뒷부분을 적는다(머리 풀이 뒤에 붙는다).
    대충 맞으면 된다(±0.02) — 확신이 없으면 빼는 게 틀린 상자보다 낫다(빼면 쪽 전체로 폴백).
-6-2. **그림 코드 `figureCode`**(2026-10-12 — 등록 화면이 원본 크롭 옆에 코드 렌더를 그려 사람이 그 자리에서 승인·편집한다):
-   `hasFigure` 이고 `figureBox` 를 적은 본문 줄에 지문 그림의 도형 코드(figure-dsl/v0, `coords:"image"` — **`figureBox` 크롭 기준**
-   폭 0~1000)를 JSON 객체로 적는다. 어휘·함정은 `figure-transcriber` 지침과 같다. 쓴 뒤
-   `npx tsx scripts/render_figure_dsl.ts <code.json> <out.png> --size WxH` 로 그려 원본과 한 번 대조한다(재검 1회).
-   서버가 적재 때 판정해 걸리면 코드만 버리고(문항은 적재) notes 에 남긴다. **그림 문항마다 코드를 쓴다**(2026-10-19 사용자
-   지시 — 추출 한 번에 그림 전사까지 끝낸다). 어휘는 `figure_transcribe_read(limit:1)` 의 `rules` 가 정본(좌표평면은 `canvas`+`view`,
-   도형은 `coords:"image"`). `canvas` 는 `figureBox` 를 A4 150dpi 쪽(1240×1754)에 얹은 픽셀 크기(서버 `nominalCropSize` 와 같은 식).
-   빼는 것은 figure-transcribe lessons F-13·F-14·F-15 의 `unsupported`(삽화·색이 뜻을 갖는 표·곡선 사이 색칠·다중 패널)뿐이고(조립제법은 D 유형 — 옮긴다), 뺀 번호와
-   사유를 보고에 적는다(원본 크롭으로 저장돼 그림 전사 큐로 간다).
+6-2. **그림은 원본 크롭만**(2026-10-25 사용자 지시): 본문은 `hasFigure`·`figureBox`, 그림 보기는 `choicesAreFigures`·`choicesBox`, 해설은 `explanationFigures`의 쪽·상자를 정확히 보존한다. 추출하면서 `figureCode`를 새로 작성하거나 렌더·전사 도구를 실행하지 않는다. 기존 프리셋이 `transcribeFigures:true`여도 동일하다. 이미 작성·저장된 코드는 보존한다. 사용자가 나중에 그림 전사를 별도로 요청하면 `figure-transcribe` 하네스로 진행한다.
 7. **교재 오식은 고치지 않는다** — 원문대로 옮기고 보고의 「확인 요청」에.
 7-1. **재발 유형 점검**: dryRun 전에 lessons 「전사 재발 유형」(L-26~L-32 — 단계 머리·채점 기준표·고아 그림 문구·`±`/`\frac`/마침표·표 보기·밑줄)을 내 jsonl 에 한 번 대조한다.
 8. 다 쓰면 jsonl 내용으로 `extract_pages_apply(documentId, fromPage, toPage, keyFromPage, keyToPage, items, answers, specs)`

@@ -64,5 +64,15 @@
 - **L-33** 검산기 샌드박스(`sympy_verify`·`extract_pages_apply` specs)는 **식 하나**만 평가한다 — `lambda`·리스트/제너레이터 컴프리헨션·
   키워드 인자(`solve(..., dict=True)`)·`Eq(...)` 는 `invalid syntax`/`cannot assign` 으로 떨어진다(2026-10-19 잡 129 에서 12건). `solve(...)[0]`·
   `solve([...],[a,b])[a]`·`Poly(...).all_coeffs()[i]`·`.subs(x, v)`·`max(p, q)` 같은 호출 연쇄로 쓴다. `max(list)` 도 "not comparable" — 원소를 풀어 쓴다.
-- **L-34** 해설 지면이 없는 문서(기출 시험지)는 전사관이 **직접 풀어** `answers`(page 없음)·`explanationLatex` 를 쓴다(2026-10-19 사용자 지시).
-  서버는 `page` 없는 해설 줄도 번호로 붙인다(`answerKeyPage` 만 비운다). 적재 결과는 DRAFT — VERIFIED 는 `verify_ids`·판정관·사람 승인 뒤다.
+- **L-34** 해설 지면이 없는 문서(기출 시험지)는 전사관이 `answers` 를 **비운다** — 정답·해설은 눈가림 솔버의 `aiChecks`(answer + explanationLatex)로
+  서버가 「AI 정답(답지 없음)」으로 채운다(2026-11-19 E-R3, 서버 안내 `mcp/workflow.ts` 와 맞춤. 옛 규칙 "전사관이 직접 풀어 answers 로"는 폐기 —
+  `page` 없는 answers 줄도 정답표(subject `해설`)로 들어가 전사관 답이 대조 기준이 됐다). 2차 독립 풀이는 적재 뒤 다른 에이전트가
+  `extract_job_items_update` aiCrossCheck 로 넣는다(적재 호출의 aiCrossChecks 는 400).
+- **L-36** 배치 산출은 `jsonl/` 폴더에 쓴다 — `.claude/settings.local.json` 의 `Read(out/**)`·`Read(data/**)` 거부 규칙이 **이름이 같은 모든 폴더**에 걸려 `out/` 에 쓴 파일을 메인·솔버가 못 읽는다(2026-10-22 쎈 공통수학1).
+- **L-37** 적재는 **쪽 단위 묶음(≤14KB·≤20문항)** 으로 나눠 `extract_pages_apply` 를 여러 번 부른다 — 한 번에 100건을 손으로 옮기면 잘리거나
+  JSON 이 깨져 분류기가 중단한다(2026-10-22). 스크립트로 `pages/answers/specs/aichecks` 를 문항 번호로 묶어 쪽별 JSON 을 만들고(이어짐 줄은 앞 해설 줄에 붙여 같은 묶음),
+  그 파일 내용을 **그대로** 인자로 싣는다. JSON-RPC 스크립트로 MCP 를 직접 치는 우회는 분류기가 막는다 — 도구를 직접 부른다. aiChecks 의 `page` 는 문항 본문 쪽과 같아야 붙는다.
+- **L-38** 검산기 답 파서 한계(2026-10-22): `±` 와 근호·허수가 섞인 답, 답 속 `\le`, 부등식 범위 답은 파싱 실패 → `none(range/expression)` 으로 두고 판정관·메인이 손으로 푼다.
+  `min`·`Naturals`·`Integers`·`Range`·`.dot`·`.T`·`det()` 는 샌드박스가 막는다(행렬식은 성분 곱으로 풀어 쓴다). 행렬 답 자체는 비교하지 않으니 `none(expression)` 또는 성분/합 값으로 검산.
+- **L-39** 답지 없는 이중풀이 배치에서 2차 솔버는 배치 폴더 README·진행 로그도 열 수 있다 — README 「확인 요청」에 1차 답 값을 쓰면 눈가림이 깨진다(2026-11-01 학교기출 133-22·135-18). 2차 풀이가 끝나기 전엔 README 에 답 값을 쓰지 말고, 2차 브리프에 "README 도 열지 않는다"를 넣는다. 깨진 건은 aiCrossCheck 로 넣지 말고 새 솔버로 재확인.
+- **L-40** specs `noneReason` 은 9어휘(parser·counting·proposition·proof·approx·range·multi·expression·other)만 받는다 — "count: 설명" 처럼 쓰면 적재가 400 으로 통째 실패한다. 설명은 note 에. 답지가 없어 answers 가 비어도 같은 호출의 aiChecks 가 정답을 채운 뒤 specs 를 붙인다 — aiChecks 없이 적재하면 specs 가 noAnswer 로 버려진다(2026-11-19 확인, `attachManualEvidence`).

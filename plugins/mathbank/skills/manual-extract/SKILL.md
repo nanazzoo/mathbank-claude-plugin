@@ -90,6 +90,8 @@ PC 든 맥이든 같은 도구, 같은 순서다. DB 에 직접 닿는 CLI(`veri
 
 ## Phase 3. 전사 — `extract-transcriber` ≤3명 병렬
 
+그림은 원본 크롭만 보존한다(`hasFigure`·`figureBox`·그림 보기 상자·해설 그림 상자). 기존 프리셋이 `transcribeFigures:true`여도 추출 단계에서 그림 코드를 새로 쓰지 않는다. 기존 코드는 보존하며, 사용자가 나중에 별도로 요청하면 `figure-transcribe`를 적용한다.
+
 구분마다 한 명. 브리프: `<out>` · 구분 문자 · 본문 쪽 · 해설 쪽 · 번호 범위 · 문서 id.
 전사관은 jsonl 을 쓰고 `extract_pages_apply` **dryRun 까지만** 한다. 끝나면 **12줄 이내 보고**만 돌려준다.
 메인은 보고를 SPLIT 「진행 로그」에 `### <구분> 완료` 절로 append 한다 — 전사관이 SPLIT 을 동시에 고치지 않게
@@ -99,10 +101,11 @@ PC 든 맥이든 같은 도구, 같은 순서다. DB 에 직접 닿는 CLI(`veri
 적는다(`extract-transcriber` 원칙 6-1 · lessons L-25). 등록하면 `Problem.sourceRegion`·`answerKeyPage`·`answerKeyRegion` 으로 가고
 문항 상세 「원본 대조」가 그 부분만 자른다. 영역 없이 등록된 과거 문항은 MCP `problem_region_update`(dryRun 기본)로 채운다.
 
-**해설 지면이 없는 문서(기출 시험지 등)는 전사관이 문항을 직접 풀어 `answers`(page 없음)·`explanationLatex`·검산식을 함께 쓴다**
-(전사관 원칙 5-1, 2026-10-19). 요청함 `extract_pages` 가 `includeExplanations:false` 거나 문서에 정답지가 없을 때가 여기 해당한다 —
-"정답·해설 없이 문항만" 으로 끝내지 않는다. **그림 문항은 같은 패스에서 `figureCode` 까지**(원칙 6-2) — 그림 전사 배치로 미루지 않는다.
-브리프에 "해설 지면 없음 → 직접 풀기" 와 "그림 코드 필수" 를 명시한다.
+**해설 지면이 없는 문서(기출 시험지 등)는 전사관이 `answers` 를 비우고 본문·검산식만 쓴다** — 정답·해설은 Phase 3.5 솔버의
+`aiChecks`(answer + explanationLatex)로 서버가 채우고, 2차 독립 풀이는 적재 뒤 별도 호출로 넣는다(전사관 원칙 5-1, 2026-11-19 E-R3 —
+`answers` 는 page 가 없어도 정답표로 들어가 전사관 답이 대조 기준이 돼 버린다). 요청함 `extract_pages` 가 `includeExplanations:false`
+거나 문서에 정답지가 없을 때가 여기 해당한다 — "정답·해설 없이 문항만" 으로 끝내지 않는다(솔버가 반드시 aiChecks 를 쓴다). **그림은 원본 크롭만 보존한다**(2026-10-25 사용자 지시). `figureCode` 신규 작성·자동 전사를 하지 않고 나중에 별도 요청하면 `figure-transcribe`로 진행한다.
+브리프에 "해설 지면 없음 → answers 비움(솔버가 aiChecks 로)" 와 "그림은 원본 크롭만" 을 명시한다.
 
 한 명이 실패하면 1회만 다시 띄운다(이미 쓴 jsonl 을 이어 쓰라고). 또 실패하면 보고하고 나머지 구분은 대기.
 
@@ -118,6 +121,13 @@ PC 든 맥이든 같은 도구, 같은 순서다. DB 에 직접 닿는 CLI(`veri
   객관식은 보기 키("1"~"5"), 그 외는 평문 값. 그림이 있어야 풀리는 문항은 본문 지면 그림(`extract_pages_read` **본문 쪽만**)을 보거나,
   못 풀면 `answer: null` + `note`. 추측하지 않는다. 난이도는 쓰지 않는다(추출 난이도 체인이 단일 소스).
 - 구분이 여럿이면 솔버 1명이 차례로 푼다(병렬 상한 3 은 전사관이 이미 썼다).
+- **정답표에 없는 문항(답지 없음)** 은 솔버가 `explanationLatex` 에 풀이 전 과정을 꼭 쓴다 — 서버가 그 답·풀이로 정답·해설을 채운다.
+- **2차 독립 풀이(교차 확인)는 적재 뒤 별도 호출로만**(2026-11-19 결정 3 — `extract_pages_apply` 에 `aiCrossChecks` 를 실으면 400):
+  Phase 5 적재로 잡 번호를 받은 뒤, 1차 솔버와 **다른** 에이전트를 새로 띄워 같은 `out/pages-<구분>.jsonl` 만 주고(1차 aichecks·answers·
+  README·진행 로그는 열지 않는다, lessons L-39) 답지 없는 문항을 풀게 한다. 메인이 그 답을
+  `extract_job_items_update(jobId, updates:[{index, aiCrossCheck:{answer}}], dryRun:true→false)`(index 는 `extract_job_get` 결과 위치) 로 문항별로 넣은 뒤 등록한다.
+  2차 솔버가 지면 jsonl 대신 잡을 직접 읽어야 하면 반드시 `extract_job_get(blind:true)` 로 읽는다(정답·해설·1차 풀이 칸이 빠진다).
+  1차와 일치하면 등록 즉시 VERIFIED, 불일치·없음이면 사람 승인. 정답을 직접 고친 항목에는 aiCheck·aiCrossCheck 가 거절된다(E-R1).
 
 ## Phase 4. 사전 점검 (메인)
 
@@ -130,7 +140,8 @@ PC 든 맥이든 같은 도구, 같은 순서다. DB 에 직접 닿는 CLI(`veri
 ## Phase 5. 적재 → 등록 → 무료 검산 → 승인
 
 1. **메인이 직접 적재한다**: 구분마다 `out/{pages,answers,specs,aichecks}-<구분>.jsonl` 을 읽어 전사관이 보고한 쪽 범위 그대로
-   `extract_pages_apply(…, aiChecks, dryRun:false)` → 잡 번호 회수. 응답의 `aiChecks: {attached, unknown, ambiguous}` 에서
+   `extract_pages_apply(…, aiChecks, dryRun:false)` → 잡 번호 회수. answers 에 page 가 있으면 해설 범위 `keyFromPage`·`keyToPage` 를
+   함께 적는다(해설 PDF 가 따로 있는 문서에서 빼거나 한쪽만 적으면 400 — 2026-11-19 E-R4). 응답의 `aiChecks: {attached, unknown, ambiguous}` 에서
    `unknown`·`ambiguous` 가 있으면 번호·page 를 고쳐 다시 싣는다(안 붙은 문항은 자동 검수 없이 DRAFT 로 등록된다). 서브에이전트의 쓰기는 auto mode 분류기가 들쭉날쭉 막는다
    (2026-10-10 그림 전사 첫 배치: 3명 중 1명 차단). items 를 메인이 한 번 싣는 비용이 그보다 싸다.
 2. **등록 = 자동 검수** — `extract_job_register(jobId, dryRun:true)` 로 건수·중복 후보를 보고 `dryRun:false`
